@@ -33,12 +33,12 @@ public $successStatus = 200;
         $user = User::create($input);
         $success['token'] =  $user->createToken('authentication')-> accessToken;
         $success['first_name'] =  $user->first_name;
-        return response()->json(['success'=>$success], $this-> successStatus);
+        return response()->json($success, $this-> successStatus);
     }
 
     // login Api {api/login}
     public function login(){
-        if(Auth::attempt(['email' => request('email'), 'password'=>request('password')])){
+        if(Auth::attempt(['email' => request('email'), 'password'=>request('password'), 'is_active' => 1])){
             $user = Auth::user();
             $results['token'] =  $user->createToken('authentication')-> accessToken;
             $results['user']=$user;
@@ -51,7 +51,9 @@ public $successStatus = 200;
     // user Details Api {api/details}
 
     public function details(){
-        return new UserCollection(auth()->user());
+//         return new UserCollection(auth()->user());
+        $user=auth()->user();
+        return new UserCollection($user);
 //         return auth()->user();
 //         return response()->json($user, $this->successStatus);
     }
@@ -60,8 +62,12 @@ public $successStatus = 200;
     public function userList(Request $request){
         $perPage = $request->input('per_page');
         $users =User::paginate($perPage);
-        $users->makeHidden(['created_at','updated_at','email_verified_at']);
         return new UserCollection($users);
+//        return UserResource::collection($users);
+
+
+//         $users->makeHidden(['created_at','updated_at','email_verified_at']);
+//         return new UserCollection($users);
 //         $users=User::paginate(1); //pagination
 //         $users->setCollection($users->getCollection()->makeHidden(['created_at','updated_at']));
 //         return response()->json($users, $this->successStatus);
@@ -69,7 +75,11 @@ public $successStatus = 200;
 
     // User Instance
     public function userInstance($id){
-        return new UserCollection(User::where('id',$id)->get());
+            $result = User::find($id);
+            $abs = new UserResource($result);
+            return response()->json($abs,300);
+
+//         return new UserCollection(User::where('id',$id)->get());
 //         $user = User::where('id',$id)->get();
 //         return new UserResource($user);
 //         $result=User::find($id);
@@ -92,8 +102,47 @@ public $successStatus = 200;
         }
     }
 
-    // changePassword api {api/reset-password}
-    function resetPassword(Request $request) {
+    // forgotPassword api {api/forgotPassword request sent}
+    public function forgotPassword(Request $request){
+         $validator = Validator::make($request->all(), ['email' => 'required|email']);
+
+        if($validator->fails()){
+            return response()->json(
+            ['error'=>$validator->errors()], 401
+            );
+        }
+        $input=$request->all();
+        $user=User::where('email', $input['email'])->first();
+        if($user && $user->is_active){
+            $results['token'] =  $user->createToken('authentication')-> accessToken;
+            $results['user']=$user;
+             return response()->json($results);
+        }else{
+        echo 'authentication';
+        }
+
+       echo $input['email'];
+
+    }
+    // changePassword api {api/changePassword}
+    public function changePassword(Request $request) {
+//         dd($request->all());
+        $validator = Validator::make($request->all(), [
+                                    'new_password' => 'required',
+                                    'c_password' => 'required|same:new_password',]);
+        if($validator->fails()){
+                return response()->json(
+                ['error'=>$validator->errors()], 401
+                );
+        }
+        $input = $request->all();
+        $user = User::find(Auth::user()->id);
+        $user->password = bcrypt($input['new_password']);
+        $user->update();
+
+        $success['token'] =  $user->createToken('authentication')-> accessToken;
+        $success['user']=$user;
+        return response()->json($success, $this-> successStatus);
 
     }
 
